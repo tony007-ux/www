@@ -1,6 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap');
 
-:root {
+:root,
+[data-theme='dark'] {
   --bg-primary: #0a0a0f;
   --bg-secondary: #12121a;
   --bg-card: #16161f;
@@ -14,6 +15,20 @@
   --radius: 12px;
   --radius-sm: 8px;
   --shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme='light'] {
+  --bg-primary: #f5f5f7;
+  --bg-secondary: #ffffff;
+  --bg-card: #ffffff;
+  --border: #e0e0e5;
+  --text-primary: #1a1a24;
+  --text-secondary: #5a5a6e;
+  --accent: #4f46e5;
+  --accent-hover: #6366f1;
+  --accent-muted: #4338ca;
+  --success: #16a34a;
+  --shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
 }
 
 * {
@@ -565,4 +580,530 @@ button:focus:not(:focus-visible) {
   font-size: 0.85rem;
   color: var(--text-secondary);
   line-height: 1.5;
+}
+
+/* ========== Header Top ========== */
+.header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.theme-toggle {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.theme-toggle:hover {
+  background: var(--border);
+}
+
+/* ========== Difficulty Selector ========== */
+.difficulty-selector {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  justify-content: center;
+}
+
+.difficulty-label {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.difficulty-options {
+  display: flex;
+  gap: 6px;
+}
+
+.difficulty-btn {
+  padding: 6px 14px;
+  font-size: 0.85rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.difficulty-btn:hover:not(:disabled),
+.difficulty-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+.difficulty-btn:disabled {
+  opacity: 0.6;
+}
+
+/* ========== Bookmark & History Panel ========== */
+.bookmark-history-panel {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.bh-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bookmark-btn {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.bookmark-btn:hover:not(:disabled),
+.bookmark-btn.active {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.panel-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 40px;
+  min-height: 40px;
+  padding: 0 14px;
+  font-size: 0.9rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.panel-toggle:hover {
+  background: var(--border);
+}
+
+.bh-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 8px;
+  width: 280px;
+  max-height: 400px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  z-index: 100;
+  overflow: hidden;
+}
+
+.bh-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+}
+
+.bh-tabs button {
+  flex: 1;
+  padding: 10px 8px;
+  font-size: 0.85rem;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.bh-tabs button.active {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.bh-content {
+  padding: 12px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.bh-clear {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+
+.bh-clear:hover {
+  color: var(--accent);
+}
+
+.bh-empty {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  padding: 20px 0;
+}
+
+.bh-list {
+  list-style: none;
+}
+
+.bh-list li button {
+  width: 100%;
+  padding: 8px 0;
+  font-size: 0.9rem;
+  text-align: left;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.bh-list li button:hover {
+  color: var(--accent);
+}
+
+.bh-new-collection {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.bh-new-collection input {
+  flex: 1;
+  padding: 8px 12px;
+  font-size: 0.9rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+}
+
+.bh-new-collection button {
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.bh-collections {
+  list-style: none;
+}
+
+.bh-collection {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.bh-collection:last-child {
+  border-bottom: none;
+}
+
+.bh-collection strong {
+  display: block;
+  font-size: 0.9rem;
+  margin-bottom: 6px;
+}
+
+.bh-collection-queries {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.bh-collection-queries button {
+  padding: 4px 8px;
+  font-size: 0.8rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.bh-collection-queries button:hover {
+  color: var(--accent);
+}
+
+.bh-add-to {
+  margin-top: 6px;
+  font-size: 0.8rem;
+  color: var(--accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+/* ========== Timeline ========== */
+.timeline {
+  position: relative;
+}
+
+.timeline-item {
+  position: relative;
+  padding-left: 24px;
+  padding-bottom: 20px;
+}
+
+.timeline-item:last-child {
+  padding-bottom: 0;
+}
+
+.timeline-marker {
+  position: absolute;
+  left: 0;
+  top: 6px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.timeline-item::before {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 18px;
+  bottom: 0;
+  width: 2px;
+  background: var(--border);
+}
+
+.timeline-item:last-child::before {
+  display: none;
+}
+
+.timeline-date {
+  font-size: 0.8rem;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.timeline-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 4px 0 6px;
+}
+
+.timeline-desc {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+/* ========== Did You Know ========== */
+.dyk-list {
+  list-style: none;
+}
+
+.dyk-item {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 12px;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: var(--text-primary);
+}
+
+.dyk-bullet {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+/* ========== Mind Map ========== */
+.mindmap-container {
+  overflow-x: auto;
+  padding: 12px 0;
+}
+
+.mindmap-svg {
+  width: 100%;
+  min-height: 200px;
+}
+
+.mindmap-line {
+  stroke: var(--border);
+}
+
+.mindmap-node {
+  fill: var(--bg-secondary);
+  stroke: var(--accent);
+  stroke-width: 2;
+  cursor: default;
+}
+
+.mindmap-node.center {
+  fill: var(--accent);
+  stroke: var(--accent-muted);
+}
+
+.mindmap-label {
+  font-size: 10px;
+  fill: var(--text-primary);
+  font-family: inherit;
+}
+
+.mindmap-node.center + .mindmap-label {
+  fill: white;
+}
+
+/* ========== Study Planner ========== */
+.study-planner {
+  margin-top: 20px;
+}
+
+.study-streak {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.streak-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.streak-label {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.streak-btn {
+  padding: 6px 14px;
+  font-size: 0.85rem;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  margin-left: auto;
+}
+
+.streak-btn:hover {
+  background: var(--accent-hover);
+}
+
+.study-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.badge {
+  font-size: 0.8rem;
+  padding: 4px 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  color: var(--text-secondary);
+}
+
+.goals-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin-bottom: 10px;
+  color: var(--text-primary);
+}
+
+.goals-add {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.goals-add input {
+  flex: 1;
+  padding: 8px 12px;
+  font-size: 0.9rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+}
+
+.goals-add button {
+  padding: 8px 14px;
+  font-size: 0.85rem;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.goals-list {
+  list-style: none;
+}
+
+.goals-list li {
+  margin-bottom: 6px;
+}
+
+.goals-list li button {
+  width: 100%;
+  padding: 8px 0;
+  font-size: 0.9rem;
+  text-align: left;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.goals-list li.completed button {
+  text-decoration: line-through;
+  color: var(--text-secondary);
+}
+
+.goal-check {
+  color: var(--accent);
+  font-weight: bold;
 }

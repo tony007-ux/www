@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import SearchBar from '@/components/SearchBar';
 import BriefAnswer from '@/components/BriefAnswer';
 import KeyPoints from '@/components/KeyPoints';
@@ -8,7 +8,16 @@ import Overview from '@/components/Overview';
 import ImageGallery from '@/components/ImageGallery';
 import Flashcards from '@/components/Flashcards';
 import Resources from '@/components/Resources';
+import Timeline from '@/components/Timeline';
+import DidYouKnow from '@/components/DidYouKnow';
+import MindMap from '@/components/MindMap';
+import ThemeToggle from '@/components/ThemeToggle';
+import DifficultySelector from '@/components/DifficultySelector';
+import BookmarkHistoryPanel from '@/components/BookmarkHistoryPanel';
+import StudyPlanner from '@/components/StudyPlanner';
 import { generatePDF } from '@/lib/pdf';
+import { addToHistory, isBookmarked, recordStudySession } from '@/lib/storage';
+import type { DifficultyLevel } from '@/lib/ai';
 
 interface QueryResponse {
   query: string;
@@ -25,6 +34,9 @@ interface QueryResponse {
     photographer_url: string;
   }>;
   resources: Array<{ title: string; url: string; snippet?: string }>;
+  timeline?: { date: string; title: string; description: string }[];
+  didYouKnow?: string[];
+  mindMap?: { nodes: { id: string; label: string }[]; connections: { from: string; to: string }[] };
 }
 
 export default function Home() {
@@ -32,6 +44,8 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [difficulty, setDifficulty] = useState<DifficultyLevel>('medium');
+  const [bookmarked, setBookmarked] = useState(false);
 
   const handleSearch = useCallback(async (query: string) => {
     setLoading(true);
@@ -42,18 +56,25 @@ export default function Home() {
       const res = await fetch('/api/query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query }),
+        body: JSON.stringify({ query, difficulty }),
       });
 
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Request failed');
       setData(json);
+      addToHistory(query);
+      recordStudySession();
+      setBookmarked(isBookmarked(query));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [difficulty]);
+
+  useEffect(() => {
+    if (data) setBookmarked(isBookmarked(data.query));
+  }, [data]);
 
   const handleDownloadPDF = useCallback(async () => {
     if (!data) return;
@@ -66,6 +87,9 @@ export default function Home() {
         overview: data.overview,
         flashcards: data.flashcards,
         resources: data.resources.map((r) => ({ title: r.title, url: r.url })),
+        timeline: data.timeline,
+        didYouKnow: data.didYouKnow,
+        mindMap: data.mindMap,
       });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -83,8 +107,20 @@ export default function Home() {
   return (
     <main className="main">
       <header className="header">
-        <h1 className="logo">Info Quest</h1>
+        <div className="header-top">
+          <h1 className="logo">Info Quest</h1>
+          <div className="header-actions">
+            <ThemeToggle />
+            <BookmarkHistoryPanel
+              currentQuery={data?.query}
+              onSearch={handleSearch}
+              isBookmarked={bookmarked}
+              onBookmarkChange={() => setBookmarked(isBookmarked(data?.query ?? ''))}
+            />
+          </div>
+        </div>
         <p className="tagline">AI-powered information retrieval — your gossipy uncle meets personal tutor</p>
+        <DifficultySelector value={difficulty} onChange={setDifficulty} disabled={loading} />
         <SearchBar onSearch={handleSearch} isLoading={loading} />
       </header>
 
@@ -137,11 +173,17 @@ export default function Home() {
               <BriefAnswer content={data.briefAnswer} query={data.query} />
               <KeyPoints points={data.keyPoints} />
               <Overview sections={data.overview} />
+              {data.timeline && data.timeline.length > 0 && <Timeline items={data.timeline} />}
+              {data.didYouKnow && data.didYouKnow.length > 0 && <DidYouKnow facts={data.didYouKnow} />}
             </div>
             <div className="results-col results-side">
               <ImageGallery images={data.images} query={data.query} />
               <Flashcards cards={data.flashcards} />
+              {data.mindMap && data.mindMap.nodes.length > 0 && (
+                <MindMap nodes={data.mindMap.nodes} connections={data.mindMap.connections} />
+              )}
               <Resources resources={data.resources} />
+              <StudyPlanner currentTopic={data.query} />
             </div>
           </div>
         </div>
@@ -151,6 +193,7 @@ export default function Home() {
         <div className="empty-state">
           <p>Type any topic above and hit Enter</p>
           <p className="empty-examples">e.g. &quot;Machu Picchu&quot;, &quot;Photosynthesis&quot;, &quot;Marie Curie&quot;</p>
+          <StudyPlanner />
         </div>
       )}
     </main>

@@ -12,6 +12,9 @@ interface PDFContent {
   overview: { subtopic: string; content: string }[];
   flashcards: { front: string; back: string }[];
   resources: { title: string; url: string }[];
+  timeline?: { date: string; title: string; description: string }[];
+  didYouKnow?: string[];
+  mindMap?: { nodes: { id: string; label: string }[]; connections: { from: string; to: string }[] };
 }
 
 const MARGIN = 20;
@@ -104,6 +107,49 @@ export async function generatePDF(content: PDFContent): Promise<Blob> {
       y += Math.max(LINE_HEIGHT, backLines.length * LINE_HEIGHT) + 4;
     });
   });
+
+  // Timeline
+  if (content.timeline && content.timeline.length > 0) {
+    addSection('Timeline', () => {
+      content.timeline!.forEach((t) => {
+        addPageBreak();
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(BODY_SIZE + 1);
+        doc.text(`${t.date} — ${t.title}`, MARGIN, y);
+        y += LINE_HEIGHT + 2;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(BODY_SIZE);
+        const lines = doc.splitTextToSize(t.description, PAGE_WIDTH - 2 * MARGIN);
+        doc.text(lines, MARGIN, y);
+        y += lines.length * LINE_HEIGHT + 4;
+      });
+    });
+  }
+
+  // Did You Know
+  if (content.didYouKnow && content.didYouKnow.length > 0) {
+    addSection('Did You Know?', () => {
+      content.didYouKnow!.forEach((fact) => {
+        addPageBreak();
+        doc.setFontSize(BODY_SIZE);
+        const lines = doc.splitTextToSize('✦ ' + fact, PAGE_WIDTH - 2 * MARGIN - 4);
+        doc.text(lines, MARGIN, y);
+        y += lines.length * LINE_HEIGHT + 2;
+      });
+    });
+  }
+
+  // Mind Map (as text)
+  if (content.mindMap && content.mindMap.nodes.length > 0) {
+    addSection('Mind Map', () => {
+      content.mindMap!.nodes.forEach((n) => {
+        addPageBreak();
+        doc.setFontSize(BODY_SIZE);
+        doc.text(`• ${n.label}`, MARGIN, y);
+        y += LINE_HEIGHT + 2;
+      });
+    });
+  }
 
   // Resources
   addSection('Sources & Resources', () => {

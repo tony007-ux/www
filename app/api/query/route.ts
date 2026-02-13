@@ -4,8 +4,17 @@
  */
 
 import { searchWeb, formatSearchContext, type SearchResult } from '@/lib/search';
-import { generateStructuredResponse, type StructuredResponse } from '@/lib/ai';
+import { generateStructuredResponse, type StructuredResponse, type DifficultyLevel } from '@/lib/ai';
 import { searchImages, type PexelsImage } from '@/lib/images';
+
+function hasContent(r: StructuredResponse): boolean {
+  return !!(
+    (r.briefAnswer && r.briefAnswer.length > 10) ||
+    (r.keyPoints && r.keyPoints.length > 0) ||
+    (r.overview && r.overview.length > 0 && r.overview.some((o) => o.content?.length > 0)) ||
+    (r.flashcards && r.flashcards.length > 0)
+  );
+}
 
 export interface QueryResponse {
   query: string;
@@ -15,11 +24,19 @@ export interface QueryResponse {
   flashcards: { front: string; back: string }[];
   images: PexelsImage[];
   resources: SearchResult[];
+  timeline?: { date: string; title: string; description: string }[];
+  didYouKnow?: string[];
+  mindMap?: { nodes: { id: string; label: string }[]; connections: { from: string; to: string }[] };
 }
 
 export async function POST(request: Request) {
   try {
-    const { query } = await request.json();
+    const body = await request.json();
+    const query = body?.query;
+    const difficulty: DifficultyLevel = ['simple', 'medium', 'advanced'].includes(body?.difficulty)
+      ? body.difficulty
+      : 'medium';
+
     if (!query || typeof query !== 'string') {
       return Response.json({ error: 'Query is required' }, { status: 400 });
     }
@@ -38,10 +55,17 @@ export async function POST(request: Request) {
     const searchContext = formatSearchContext(searchResults);
 
     // AI generation (uses search context for accuracy)
-    const aiResponse: StructuredResponse = await generateStructuredResponse(
+    let aiResponse: StructuredResponse = await generateStructuredResponse(
       trimmedQuery,
-      searchContext
+      searchContext,
+      difficulty
     );
+
+    // Fallback: if AI returns empty content, use structured search results
+    if (!hasContent(aiResponse)) {
+      const { structureFromSearchResults } = await import('@/lib/ai');
+      aiResponse = structureFromSearchResults(trimmedQuery, searchContext);
+    }
 
     const response: QueryResponse = {
       query: trimmedQuery,
@@ -51,6 +75,9 @@ export async function POST(request: Request) {
       flashcards: aiResponse.flashcards,
       images,
       resources: searchResults.slice(0, 8),
+      timeline: aiResponse.timeline,
+      didYouKnow: aiResponse.didYouKnow,
+      mindMap: aiResponse.mindMap,
     };
 
     return Response.json(response);

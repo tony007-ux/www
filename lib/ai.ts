@@ -6,51 +6,70 @@
 
 import Groq from 'groq-sdk';
 
-const SYSTEM_PROMPT = `You are a knowledgeable, engaging information assistant - think "gossiping uncle who happens to be a brilliant professor." 
-You provide thorough, accurate information in an entertaining yet educational way.
-Always use up-to-date information. Be conversational but informative.
+const BASE_SYSTEM = `You are a knowledgeable, engaging information assistant. Provide accurate, comprehensive information.
+You MUST respond with ONLY a valid JSON object. No text before or after. No markdown code blocks.
+Required keys: briefAnswer (string), keyPoints (array of strings), overview (array of {subtopic, content}), flashcards (array of {front, back}).`;
 
-You MUST respond with ONLY a valid JSON object. No text before or after. No markdown. No code blocks.
-The JSON must have exactly these keys: briefAnswer, keyPoints, overview, flashcards.
+export type DifficultyLevel = 'simple' | 'medium' | 'advanced';
 
-Format:
-{"briefAnswer":"2-3 sentence summary","keyPoints":["Point 1","Point 2","Point 3","Point 4","Point 5"],"overview":[{"subtopic":"Section Title","content":"Detailed paragraph"},{"subtopic":"Another Section","content":"More details"}],"flashcards":[{"front":"Question or term","back":"Answer or definition"},{"front":"Another question","back":"Answer"}]}
+const DIFFICULTY_HINTS: Record<DifficultyLevel, string> = {
+  simple: 'Use very simple language. Explain like to a curious 10-year-old. Short sentences. Avoid jargon.',
+  medium: 'Use clear, accessible language. Suitable for general adult audience.',
+  advanced: 'Use precise terminology. Include technical details and nuances. Suitable for experts.',
+};
 
-Rules:
-- briefAnswer: string, 2-3 sentences
-- keyPoints: array of 4-6 strings
-- overview: array of 2-4 objects, each with "subtopic" and "content" strings
-- flashcards: array of 4-6 objects, each with "front" and "back" strings
-- Use double quotes for all JSON strings. Escape internal quotes with \\
-- Never omit keyPoints, overview, or flashcards - always include all four sections`;
+export interface TimelineItem {
+  date: string;
+  title: string;
+  description: string;
+}
+
+export interface MindMapNode {
+  id: string;
+  label: string;
+}
 
 export interface StructuredResponse {
   briefAnswer: string;
   keyPoints: string[];
   overview: { subtopic: string; content: string }[];
   flashcards: { front: string; back: string }[];
+  timeline?: TimelineItem[];
+  didYouKnow?: string[];
+  mindMap?: { nodes: MindMapNode[]; connections: { from: string; to: string }[] };
 }
 
 export async function generateStructuredResponse(
   query: string,
-  searchContext: string
+  searchContext: string,
+  difficulty: DifficultyLevel = 'medium'
 ): Promise<StructuredResponse> {
   const groqKey = process.env.GROQ_API_KEY;
   const hfKey = process.env.HUGGINGFACE_API_KEY;
+  const diffHint = DIFFICULTY_HINTS[difficulty];
 
   const userPrompt = `Topic: "${query}"
+${diffHint}
 
-${searchContext ? `Web search context (use to enhance accuracy):\n${searchContext}\n\n` : ''}
-Provide comprehensive information. Return a single JSON object with briefAnswer, keyPoints, overview, and flashcards. No other text.`;
+${searchContext ? `Web context:\n${searchContext}\n` : ''}
+Return a JSON object with these exact keys:
+- briefAnswer: 2-3 sentence summary (required)
+- keyPoints: array of 4-6 strings
+- overview: array of objects with "subtopic" and "content"
+- flashcards: array of objects with "front" and "back"
+- timeline: REQUIRED for historical topics, people, events, wars, revolutions, inventions, or anything with dates. Array of 4-8 objects: {"date":"YYYY or YYYY-MM","title":"Event name","description":"Brief detail"}. Include key milestones in chronological order. If not applicable, use [].
+- didYouKnow: 3-5 fun facts (array of strings)
+- mindMap: {"nodes":[{"id":"1","label":"Concept"}],"connections":[{"from":"1","to":"2"}]} - 5-8 nodes, 4-8 connections
 
-  // Try Groq first (fastest - 3-5 second response)
+Return ONLY valid JSON.`;
+
   if (groqKey) {
     try {
       const groq = new Groq({ apiKey: groqKey });
       const completion = await groq.chat.completions.create({
         model: 'llama-3.1-8b-instant',
         messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'system', content: BASE_SYSTEM },
           { role: 'user', content: userPrompt },
         ],
         temperature: 0.5,
@@ -68,12 +87,10 @@ Provide comprehensive information. Return a single JSON object with briefAnswer,
     }
   }
 
-  // Try Hugging Face
   if (hfKey) {
     return generateWithHuggingFace(userPrompt, hfKey);
   }
 
-  // Fallback: Structure from search results when no AI available
   return structureFromSearchResults(query, searchContext);
 }
 
@@ -88,7 +105,7 @@ async function generateWithHuggingFace(userPrompt: string, apiKey: string): Prom
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          inputs: `<s>[INST] ${SYSTEM_PROMPT}\n\n${userPrompt} [/INST]`,
+          inputs: `<s>[INST] ${BASE_SYSTEM}\n\n${userPrompt} [/INST]`,
           parameters: {
             max_new_tokens: 2048,
             temperature: 0.7,
@@ -110,69 +127,102 @@ async function generateWithHuggingFace(userPrompt: string, apiKey: string): Prom
 function parseAIResponse(content: string): StructuredResponse {
   let jsonStr = content.trim();
 
-  // Extract JSON - try multiple strategies
   const codeBlockMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (codeBlockMatch) jsonStr = codeBlockMatch[1].trim();
 
   const braceMatch = jsonStr.match(/\{[\s\S]*\}/);
   if (braceMatch) jsonStr = braceMatch[0];
 
-  // Fix common LLM mistake: trailing commas before ] or }
   jsonStr = jsonStr.replace(/,\s*([}\]])/g, '$1');
 
   try {
     const parsed = JSON.parse(jsonStr);
 
-    // Validate and normalize each section
-    const keyPoints = Array.isArray(parsed.keyPoints)
-      ? parsed.keyPoints.filter((p: unknown) => typeof p === 'string').map((p: string) => String(p).trim()).filter(Boolean)
+    const p = (k: string) => parsed[k] ?? parsed[k.replace(/([A-Z])/g, '_$1').toLowerCase()];
+
+    const briefAnswer = String(p('briefAnswer') ?? p('brief_answer') ?? content.slice(0, 600) ?? 'Information retrieved.').trim();
+
+    const keyPoints = Array.isArray(p('keyPoints'))
+      ? (p('keyPoints') as unknown[]).filter((x: unknown) => typeof x === 'string').map((x: string) => String(x).trim()).filter(Boolean)
       : [];
 
-    const overview = Array.isArray(parsed.overview)
-      ? parsed.overview
-          .filter((o: unknown): o is Record<string, unknown> => o !== null && typeof o === 'object' && ('subtopic' in o || 'content' in o))
-          .map((o: { subtopic?: string; content?: string }) => ({
-            subtopic: String(o.subtopic ?? o.content ?? 'Section').trim(),
-            content: String(o.content ?? o.subtopic ?? '').trim(),
+    const overviewRaw = p('overview');
+    const overview = Array.isArray(overviewRaw)
+      ? (overviewRaw as unknown[])
+          .filter((o: unknown): o is Record<string, unknown> => o !== null && typeof o === 'object')
+          .map((o: Record<string, unknown>) => {
+            const sub = String(o.subtopic ?? o.title ?? o.section ?? o.name ?? 'Section').trim();
+            const cont = String(o.content ?? o.description ?? o.text ?? o.body ?? sub ?? '').trim();
+            return { subtopic: sub || 'Section', content: cont };
+          })
+          .filter((o) => o.content || o.subtopic)
+      : [];
+
+    const flashcardsRaw = p('flashcards');
+    const flashcards = Array.isArray(flashcardsRaw)
+      ? (flashcardsRaw as unknown[])
+          .filter((f: unknown): f is Record<string, unknown> => f !== null && typeof f === 'object')
+          .map((f: Record<string, unknown>) => ({
+            front: String(f.front ?? f.question ?? f.term ?? f.back ?? 'Question').trim(),
+            back: String(f.back ?? f.answer ?? f.definition ?? f.front ?? '').trim(),
           }))
-          .filter((o: { content: string }) => o.content)
+          .filter((f) => f.front && f.back)
       : [];
 
-    const flashcards = Array.isArray(parsed.flashcards)
-      ? parsed.flashcards
-          .filter((f: unknown): f is Record<string, unknown> => f !== null && typeof f === 'object' && ('front' in f || 'back' in f))
-          .map((f: { front?: string; back?: string }) => ({
-            front: String(f.front ?? f.back ?? 'Question').trim(),
-            back: String(f.back ?? f.front ?? '').trim(),
-          }))
-          .filter((f: { front: string; back: string }) => f.front && f.back)
-      : [];
-
-    // If parsing succeeded but sections are empty, generate from briefAnswer
-    const briefAnswer = String(parsed.briefAnswer ?? content.slice(0, 500) ?? 'Information retrieved.').trim();
-
-    if (briefAnswer && keyPoints.length === 0 && overview.length === 0 && flashcards.length === 0) {
-      // Fallback: split briefAnswer into key points, create minimal overview and flashcards
-      const sentences = briefAnswer.split(/[.!?]+/).map((s: string) => s.trim()).filter((s: string) => s.length > 20);
+    if (keyPoints.length === 0 && overview.length === 0 && flashcards.length === 0) {
+      const text = briefAnswer || content.slice(0, 600);
+      const sentences = text.split(/[.!?]+/).map((s: string) => s.trim()).filter((s: string) => s.length > 15);
       return {
-        briefAnswer,
+        briefAnswer: text || 'Information retrieved.',
         keyPoints: sentences.slice(0, 5),
-        overview: [{ subtopic: 'Summary', content: briefAnswer }],
-        flashcards: sentences.slice(0, 4).map((s, i) => ({
-          front: `Key point ${i + 1}`,
-          back: s,
-        })),
+        overview: [{ subtopic: 'Summary', content: text }],
+        flashcards: sentences.slice(0, 4).map((s, i) => ({ front: `Key point ${i + 1}`, back: s })),
       };
     }
 
+    const timeline = Array.isArray(parsed.timeline)
+      ? parsed.timeline
+          .filter((t: unknown): t is Record<string, unknown> => t !== null && typeof t === 'object')
+          .map((t: { date?: string; title?: string; description?: string }) => ({
+            date: String(t.date ?? ''),
+            title: String(t.title ?? ''),
+            description: String(t.description ?? ''),
+          }))
+          .filter((t: { date: string; title: string }) => t.date || t.title)
+      : [];
+
+    const didYouKnow = Array.isArray(parsed.didYouKnow)
+      ? parsed.didYouKnow.filter((x: unknown) => typeof x === 'string').map((x: string) => String(x).trim()).filter(Boolean)
+      : [];
+
+    let mindMap: StructuredResponse['mindMap'];
+    if (parsed.mindMap && typeof parsed.mindMap === 'object') {
+      const m = parsed.mindMap as Record<string, unknown>;
+      const nodes = Array.isArray(m.nodes)
+        ? (m.nodes as Array<{ id?: string; label?: string }>)
+            .filter((n) => n && typeof n === 'object')
+            .map((n) => ({ id: String(n.id ?? ''), label: String(n.label ?? '') }))
+            .filter((n) => n.id || n.label)
+        : [];
+      const connections = Array.isArray(m.connections)
+        ? (m.connections as Array<{ from?: string; to?: string }>)
+            .filter((c) => c && typeof c === 'object')
+            .map((c) => ({ from: String(c.from ?? ''), to: String(c.to ?? '') }))
+            .filter((c) => c.from && c.to)
+        : [];
+      if (nodes.length > 0) mindMap = { nodes, connections };
+    }
+
     return {
-      briefAnswer: briefAnswer || 'Information retrieved.',
-      keyPoints,
+      briefAnswer: briefAnswer || content.slice(0, 500) || 'Information retrieved.',
+      keyPoints: keyPoints.length > 0 ? keyPoints : [briefAnswer].filter(Boolean),
       overview: overview.length > 0 ? overview : [{ subtopic: 'Overview', content: briefAnswer }],
       flashcards,
+      timeline: timeline.length > 0 ? timeline : undefined,
+      didYouKnow: didYouKnow.length > 0 ? didYouKnow : undefined,
+      mindMap,
     };
   } catch {
-    // Last resort: use raw content
     const fallback = content.slice(0, 500) || 'Could not parse AI response.';
     const sentences = fallback.split(/[.!?]+/).map((s) => s.trim()).filter((s) => s.length > 15);
     return {
@@ -184,7 +234,7 @@ function parseAIResponse(content: string): StructuredResponse {
   }
 }
 
-function structureFromSearchResults(query: string, searchContext: string): StructuredResponse {
+export function structureFromSearchResults(query: string, searchContext: string): StructuredResponse {
   const lines = searchContext.split('\n').filter(Boolean);
   const snippets = lines
     .map((l) => l.replace(/^\d+\.\s*/, '').split('\n')[0])
